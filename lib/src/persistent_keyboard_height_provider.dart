@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:keyboard_utils/keyboard_listener.dart' as keyboard_utils;
-import 'package:keyboard_utils/keyboard_utils.dart';
+import 'package:keyboard_utils_fork/keyboard_listener.dart' as keyboard_utils;
+import 'package:keyboard_utils_fork/keyboard_utils.dart';
 
 import 'i_persistent_keyboard_height_storage_provider.dart';
 import 'persistent_keyboard_height.dart';
