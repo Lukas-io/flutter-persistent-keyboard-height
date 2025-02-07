@@ -12,7 +12,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  keyboard_utils_fork: ^1.0.1
+  keyboard_utils:
+    git:
+      url: https://github.com/Lukas-io/flutter-keyboard-utils.git
+      ref: release
   shared_preferences: ^2.0.13
 
 dev_dependencies:
