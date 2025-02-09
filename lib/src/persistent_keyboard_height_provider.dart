@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:keyboard_utils/keyboard_listener.dart' as keyboard_utils;
-import 'package:keyboard_utils/keyboard_utils.dart';
+import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
 
 import 'i_persistent_keyboard_height_storage_provider.dart';
 import 'persistent_keyboard_height.dart';
@@ -10,7 +11,7 @@ class PersistentKeyboardHeightProvider extends StatefulWidget {
   const PersistentKeyboardHeightProvider({
     required this.child,
     this.storageProvider =
-        const SharedPreferencesPersistentKeyboardSizeStorageProvider(),
+    const SharedPreferencesPersistentKeyboardSizeStorageProvider(),
     Key? key,
   }) : super(key: key);
 
@@ -24,26 +25,17 @@ class PersistentKeyboardHeightProvider extends StatefulWidget {
 
 class _PersistentKeyboardHeightProviderState
     extends State<PersistentKeyboardHeightProvider> {
-  final KeyboardUtils _keyboardUtils = KeyboardUtils();
-
-  /// The ID we get when adding a listener to [_keyboardUtils] via
-  /// [KeyboardUtils.add]. Used in [dispose] to remove the listener.
-  int? _keyboardUtilsListenerId;
-
-  /// The value that we get from
-  /// [keyboard_utils.KeyboardListener.willShowKeyboard].
-  double _keyboardHeightFromKeyboardUtils = 0.0;
-
-  /// Exposed via [PersistentKeyboardHeight.keyboardHeight].
+  /// The current keyboard height exposed via [PersistentKeyboardHeight.keyboardHeight]
   double _keyboardHeight = 0.0;
 
-  /// Used in [_onWillShowKeyboard] for calling [_maybeSetKeyboardHeight].
-  double _bottomOffset = 0.0;
+  /// Subscription to keyboard visibility changes
+  late final StreamSubscription<bool> _keyboardSubscription;
 
   @override
   void initState() {
     super.initState();
 
+    // Load saved keyboard height
     widget.storageProvider.getHeight().then((value) {
       if (value > 0 && _keyboardHeight < 1) {
         _keyboardHeight = value;
@@ -51,66 +43,37 @@ class _PersistentKeyboardHeightProviderState
       }
     });
 
-    _keyboardUtilsListenerId = _keyboardUtils.add(
-      listener: keyboard_utils.KeyboardListener(
-        willShowKeyboard: _onWillShowKeyboard,
-      ),
-    );
+    // Listen to keyboard visibility changes
+    _keyboardSubscription = KeyboardVisibilityController().onChange.listen((bool visible) {
+      if (visible) {
+        // Small delay to ensure view insets are updated
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) {
+            final bottomOffset = MediaQuery.of(context).viewInsets.bottom;
+            _updateKeyboardHeight(bottomOffset);
+          }
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
-    _keyboardUtils.unsubscribeListener(subscribingId: _keyboardUtilsListenerId);
-    if (_keyboardUtils.canCallDispose()) {
-      _keyboardUtils.dispose();
-    }
+    _keyboardSubscription.cancel();
     super.dispose();
   }
 
-  /// The callback that is passed to [keyboard_utils.KeyboardListener]
-  /// on [KeyboardUtils.add].
-  void _onWillShowKeyboard(double height) {
-    _keyboardHeightFromKeyboardUtils = height;
-
-    if (_keyboardHeight > height) {
-      _maybeSetKeyboardHeight(
-        bottomOffset: _bottomOffset,
-        keyboardHeightFromKeyboardUtils: height,
-      );
-    }
-  }
-
-  /// Checks whether or not keyboard height should be updated  and
-  /// if so, updates the inherited widget and saves the height
-  /// via [widget.storageProvider].
-  void _maybeSetKeyboardHeight({
-    required double bottomOffset,
-    required double keyboardHeightFromKeyboardUtils,
-  }) async {
-    if (bottomOffset >= keyboardHeightFromKeyboardUtils) {
+  /// Updates the keyboard height if necessary and saves it
+  void _updateKeyboardHeight(double bottomOffset) async {
+    if (bottomOffset > 0 && bottomOffset != _keyboardHeight) {
       _keyboardHeight = bottomOffset;
-
-      /// Perhaps [mounted] will always be [true] when this code is reached
-      /// but let's be safe :).
       if (mounted) setState(() {});
-
       await widget.storageProvider.setHeight(bottomOffset);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // https://stackoverflow.com/a/49271649/9714875
-    _bottomOffset = MediaQuery.of(context).viewInsets.bottom;
-
-    if (_keyboardHeightFromKeyboardUtils != 0 &&
-        _bottomOffset != _keyboardHeight) {
-      _maybeSetKeyboardHeight(
-        bottomOffset: _bottomOffset,
-        keyboardHeightFromKeyboardUtils: _keyboardHeightFromKeyboardUtils,
-      );
-    }
-
     return PersistentKeyboardHeight(
       keyboardHeight: _keyboardHeight,
       child: widget.child,
